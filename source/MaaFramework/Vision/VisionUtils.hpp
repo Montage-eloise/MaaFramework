@@ -55,6 +55,25 @@ inline static void sort_by_random_(ResultsVec& results)
 }
 
 template <typename ResultsVec>
+inline static void sort_by_center_distance_(ResultsVec& results, int image_width, int image_height)
+{
+    const float cx = image_width / 2.0f;
+    const float cy = image_height / 2.0f;
+
+    std::ranges::sort(results, [=](const auto& lhs, const auto& rhs) -> bool {
+        const float lcx = lhs.box.x + lhs.box.width / 2.0f;
+        const float lcy = lhs.box.y + lhs.box.height / 2.0f;
+        const float rcx = rhs.box.x + rhs.box.width / 2.0f;
+        const float rcy = rhs.box.y + rhs.box.height / 2.0f;
+
+        const float ldist_sq = (lcx - cx) * (lcx - cx) + (lcy - cy) * (lcy - cy);
+        const float rdist_sq = (rcx - cx) * (rcx - cx) + (rcy - cy) * (rcy - cy);
+
+        return ldist_sq < rdist_sq;
+    });
+}
+
+template <typename ResultsVec>
 inline static void sort_by_required_(ResultsVec& results, const std::vector<std::string>& required)
 {
     std::unordered_map<std::string, size_t> req_cache;

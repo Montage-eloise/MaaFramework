@@ -37,6 +37,7 @@ enum class ResultOrderBy
     Length,   // for OCR
     Random,
     Expected, // TODO
+    CenterDistance,
 };
 
 struct DirectHitParam

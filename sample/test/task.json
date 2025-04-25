@@ -1,0 +1,15 @@
+{
+    "MyTask": {
+        "recognition": "OCR",
+        "expected": [
+            "日志"
+        ],
+        "roi": [
+            0,
+            53,
+            437,
+            311
+        ],
+        "action": "Click"
+    }
+}

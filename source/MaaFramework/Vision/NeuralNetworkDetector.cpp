@@ -222,6 +222,9 @@ void NeuralNetworkDetector::sort_(ResultsVec& results) const
     case ResultOrderBy::Random:
         sort_by_random_(results);
         break;
+    case ResultOrderBy::CenterDistance:
+        sort_by_center_distance_(results,image_.cols, image_.rows);
+        break;
     default:
         LogError << "Not supported order by" << VAR(param_.order_by);
         break;

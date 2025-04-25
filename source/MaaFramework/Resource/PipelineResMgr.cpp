@@ -864,6 +864,7 @@ bool PipelineResMgr::parse_nn_detector_param(
                 MAA_VISION_NS::ResultOrderBy::Score,
                 MAA_VISION_NS::ResultOrderBy::Area,
                 MAA_VISION_NS::ResultOrderBy::Random,
+                MAA_VISION_NS::ResultOrderBy::CenterDistance,
             })) {
         LogError << "failed to parse_order_of_result" << VAR(input);
         return false;
@@ -1101,6 +1102,8 @@ bool PipelineResMgr::parse_order_of_result(
         { "random", MAA_VISION_NS::ResultOrderBy::Random },
         { "Expected", MAA_VISION_NS::ResultOrderBy::Expected },
         { "expected", MAA_VISION_NS::ResultOrderBy::Expected },
+        { "CenterDistance", MAA_VISION_NS::ResultOrderBy::CenterDistance },
+        { "centerdistance", MAA_VISION_NS::ResultOrderBy::CenterDistance },
     };
     auto order_iter = kOrderMap.find(order_by);
     if (order_iter == kOrderMap.end()) {

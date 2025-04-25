@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 project(MaaFw)
 
+cmake_policy(SET CMP0167 NEW)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules")
 
@@ -11,19 +12,19 @@ set(Boost_NO_WARN_NEW_VERSIONS ON)
 # set(CMAKE_EXPORT_COMPILE_COMMANDS ON) see below
 option(USE_MAADEPS "use third-party libraries built by MaaDeps" ON)
 
-option(WITH_ADB_CONTROLLER "build with adb controller" ON)
+option(WITH_ADB_CONTROLLER "build with adb controller" OFF)
 option(WITH_WIN32_CONTROLLER "build with win32 controller" ON)
 option(WITH_DBG_CONTROLLER "build with debugging controller" ON)
 option(WITH_NODEJS_BINDING "build with nodejs binding" OFF)
-option(WITH_MAA_AGENT "build with MaaAgent" ON)
+option(WITH_MAA_AGENT "build with MaaAgent" OFF)
 
 option(BUILD_PICLI "build maa picli" ON)
-option(BUILD_SAMPLE "build a demo" OFF)
+option(BUILD_SAMPLE "build a demo" ON)
 option(BUILD_PIPELINE_TESTING "build pipeline testing" OFF)
 option(BUILD_DLOPEN_TESTING "build dlopen testing" OFF)
 
 option(ENABLE_CCACHE "enable ccache if possible" ON)
-option(ENABLE_CPP20_MODULES "enable C++20 modules" ON)
+option(ENABLE_CPP20_MODULES "enable C++20 modules" OFF)
 
 set(MAA_PUBLIC_INC ${CMAKE_SOURCE_DIR}/include)
 set(MAA_PRIVATE_INC ${CMAKE_SOURCE_DIR}/source/include)
@@ -73,6 +74,7 @@ add_subdirectory(tools)
 
 if(BUILD_SAMPLE)
     add_subdirectory(sample/cpp)
+    add_subdirectory(sample/test)
 endif()
 
 if(BUILD_PIPELINE_TESTING)
