@@ -22,7 +22,7 @@ int main()
     auto ctrl_id = MaaControllerPostConnection(controller_handle);
 
     auto resource_handle = MaaResourceCreate(nullptr, nullptr);
-    std::string resource_dir = R"(D:\Work\MaaFramework\sample\test\resource)";
+    std::string resource_dir = "./resource";
     auto res_id = MaaResourcePostBundle(resource_handle, resource_dir.c_str());
 
     MaaControllerWait(controller_handle, ctrl_id);
@@ -45,21 +45,35 @@ int main()
         return -1;
     }
 
-    auto task_id = MaaTaskerPostTask(tasker_handle, "MyTask", R"({
-            "MyTask": {
-                "recognition": "OCR",
-                "expected": ["配置"],
-                "roi": [0, 53, 437, 311],
-                "action": "Click"
-            }
-        })");
+    auto task_id = MaaTaskerPostTask(tasker_handle, "AutoAttack", R"({
+    "AutoAttack": {
+        "recognition": "NeuralNetworkDetect",
+        "model": "best.onnx",
+        "labels": "smuggler",
+        "expected": [
+            0
+        ],
+        "order_by": "Area",
+        "action": "Click",
+        "next":[
+            "Attack"
+        ]
+    },
+    "Attack": {
+        "recognition": "DirectHit",
+        "action": "DoNothing",
+        "next": [
+            "AutoAttack"
+        ],
+        "post_delay": 2000
+    }
+    })");
     MaaTaskerWait(tasker_handle, task_id);
 
     destroy();
 
     return 0;
 }
-
 
 MaaController* create_win32_controller()
 {
@@ -86,15 +100,14 @@ MaaController* create_win32_controller()
         std::string class_name = MaaToolkitDesktopWindowGetClassName(window_handle);
         std::string window_name = MaaToolkitDesktopWindowGetWindowName(window_handle);
 
-        if (window_name == "Clash for Windows") {
+        if (window_name == "Pirate King Online") {
             hwnd = MaaToolkitDesktopWindowGetHandle(window_handle);
             break;
         }
     }
 
     // create controller by hwnd
-    auto controller_handle =
-        MaaWin32ControllerCreate(hwnd, MaaWin32ScreencapMethod_GDI, MaaWin32InputMethod_SendMessage, nullptr, nullptr);
+    auto controller_handle = MaaWin32ControllerCreate(hwnd, MaaWin32ScreencapMethod_GDI, MaaWin32InputMethod_Seize, nullptr, nullptr);
 
     destroy();
     return controller_handle;

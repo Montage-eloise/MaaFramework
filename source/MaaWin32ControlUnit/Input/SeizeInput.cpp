@@ -30,6 +30,18 @@ bool SeizeInput::click(int x, int y)
 
     SetCursorPos(point.x, point.y);
 
+    // // 激活窗口（附加输入队列）
+    // HWND fg = GetForegroundWindow();
+    // DWORD curTid = GetCurrentThreadId();
+    // DWORD fgTid = GetWindowThreadProcessId(fg, nullptr);
+    // AttachThreadInput(curTid, fgTid, TRUE);
+    // SetForegroundWindow(hwnd_);
+    // SetFocus(hwnd_);
+    // AttachThreadInput(curTid, fgTid, FALSE);
+
+    // Sleep(50);
+
+    // 模拟点击
     INPUT inputs[2] = {};
 
     inputs[0].type = INPUT_MOUSE;
@@ -38,7 +50,9 @@ bool SeizeInput::click(int x, int y)
     inputs[1].type = INPUT_MOUSE;
     inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
 
-    SendInput(ARRAYSIZE(inputs), inputs, sizeof(INPUT));
+    SendInput(1, &inputs[0], sizeof(INPUT));
+    Sleep(50);
+    SendInput(1, &inputs[1], sizeof(INPUT));
 
     return true;
 }
