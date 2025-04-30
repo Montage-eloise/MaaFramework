@@ -55,21 +55,52 @@ inline static void sort_by_random_(ResultsVec& results)
 }
 
 template <typename ResultsVec>
-inline static void sort_by_center_distance_(ResultsVec& results, int image_width, int image_height)
+inline static void sort_by_center_distance_(ResultsVec& results, int image_width, int image_height,float max_center_distance)  
 {
-    const float cx = image_width / 2.0f;
-    const float cy = image_height / 2.0f;
+    const float center_x = image_width * 0.5f;
+    const float center_y = image_height * 0.5f;
+    const float max_dist_sq = max_center_distance * max_center_distance;
+
+    // 先筛选在 max_center_distance 范围内的目标
+    results.erase(
+        std::remove_if(results.begin(), results.end(), [center_x, center_y, max_dist_sq](const auto& r) {
+            const float cx = r.box.x + r.box.width * 0.5f;
+            const float cy = r.box.y + r.box.height * 0.5f;
+            const float dist_sq = (cx - center_x) * (cx - center_x) + (cy - center_y) * (cy - center_y);
+            return dist_sq > max_dist_sq;
+        }),
+        results.end()
+    );
+
+    std::ranges::sort(results, [center_x, center_y](const auto& lhs, const auto& rhs) {
+        const float lhs_cx = lhs.box.x + lhs.box.width * 0.5f;
+        const float lhs_cy = lhs.box.y + lhs.box.height * 0.5f;
+        const float rhs_cx = rhs.box.x + rhs.box.width * 0.5f;
+        const float rhs_cy = rhs.box.y + rhs.box.height * 0.5f;
+
+        const float lhs_dist2 = (lhs_cx - center_x) * (lhs_cx - center_x) + (lhs_cy - center_y) * (lhs_cy - center_y);
+        const float rhs_dist2 = (rhs_cx - center_x) * (rhs_cx - center_x) + (rhs_cy - center_y) * (rhs_cy - center_y);
+
+        return lhs_dist2 < rhs_dist2;
+    });
+}
+
+template <typename ResultsVec>
+inline static void sort_by_center_distance_(ResultsVec& results, int image_width, int image_height)  
+{
+    const float cx = image_width * 0.5f;
+    const float cy = image_height * 0.5f;
 
     std::ranges::sort(results, [=](const auto& lhs, const auto& rhs) -> bool {
-        const float lcx = lhs.box.x + lhs.box.width / 2.0f;
-        const float lcy = lhs.box.y + lhs.box.height / 2.0f;
-        const float rcx = rhs.box.x + rhs.box.width / 2.0f;
-        const float rcy = rhs.box.y + rhs.box.height / 2.0f;
+        const float lhs_cx = lhs.box.x + lhs.box.width * 0.5f;
+        const float lhs_cy = lhs.box.y + lhs.box.height * 0.5f;
+        const float rhs_cx = rhs.box.x + rhs.box.width * 0.5f;
+        const float rhs_cy = rhs.box.y + rhs.box.height * 0.5f;
 
-        const float ldist_sq = (lcx - cx) * (lcx - cx) + (lcy - cy) * (lcy - cy);
-        const float rdist_sq = (rcx - cx) * (rcx - cx) + (rcy - cy) * (rcy - cy);
+        const float lhs_dist2 = (lhs_cx - cx) * (lhs_cx - cx) + (lhs_cy - cy) * (lhs_cy - cy);
+        const float rhs_dist2 = (rhs_cx - cx) * (rhs_cx - cx) + (rhs_cy - cy) * (rhs_cy - cy);
 
-        return ldist_sq < rdist_sq;
+        return lhs_dist2 < rhs_dist2;
     });
 }
 
