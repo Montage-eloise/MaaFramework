@@ -1,82 +1,28 @@
 {
-    "json.schemas": [
-        {
-            "fileMatch": [
-                "/sample/resource/pipeline/*.json"
-            ],
-            "url": "/tools/pipeline.schema.json"
-        },
-        {
-            "fileMatch": [
-                "/sample/interface.json"
-            ],
-            "url": "/tools/interface.schema.json"
-        }
-    ],
-    "[json]": {
-        "editor.formatOnSave": true,
-        "editor.insertSpaces": true,
-        "editor.tabSize": 4,
-        "editor.indentSize": "tabSize"
-    },
-    "[python]": {
-        "editor.defaultFormatter": "ms-python.black-formatter"
-    },
-    "[yaml]": {
-        "editor.insertSpaces": true,
-        "editor.tabSize": 4,
-        "editor.autoIndent": "advanced",
-        "diffEditor.ignoreTrimWhitespace": false
-    },
-    "cpplint.excludes": [
-        "3rdparty",
-        "build",
-        "out"
-    ],
-    "cpplint.filters": [
-        "-legal/copyright",
-        "-whitespace/line_length",
-        "-whitespace/comments",
-        "-whitespace/braces",
-        "-whitespace/newline",
-        "-whitespace/indent",
-        "-readability/braces",
-        "-readability/inheritance",
-        "-readability/todo",
-        "-build/c++11",
-        "-build/include_subdir",
-        "-build/namespaces",
-        "-build/include_what_you_use",
-        "-runtime/references",
-        "-runtime/string",
-        "-runtime/indentation_namespace"
-    ],
-    "python.analysis.extraPaths": [
-        "./source/binding/Python"
-    ],
-    "editor.formatOnSave": true,
-    "clangd.arguments": [
-        "--experimental-modules-support"
-    ],
-    "terminal.integrated.defaultEncoding": "utf8",
     "files.associations": {
-        "*.cmake": "cmake",
+        "vector": "cpp",
+        "bitset": "cpp",
+        "string": "cpp",
+        "iosfwd": "cpp",
         "algorithm": "cpp",
         "any": "cpp",
         "array": "cpp",
         "atomic": "cpp",
         "bit": "cpp",
-        "bitset": "cpp",
         "cctype": "cpp",
         "charconv": "cpp",
         "chrono": "cpp",
         "cinttypes": "cpp",
         "clocale": "cpp",
         "cmath": "cpp",
+        "codecvt": "cpp",
         "compare": "cpp",
         "complex": "cpp",
         "concepts": "cpp",
         "condition_variable": "cpp",
+        "coroutine": "cpp",
+        "csignal": "cpp",
+        "cstdarg": "cpp",
         "cstddef": "cpp",
         "cstdint": "cpp",
         "cstdio": "cpp",
@@ -84,17 +30,19 @@
         "cstring": "cpp",
         "ctime": "cpp",
         "cwchar": "cpp",
+        "cwctype": "cpp",
         "deque": "cpp",
         "exception": "cpp",
+        "execution": "cpp",
         "filesystem": "cpp",
         "format": "cpp",
         "forward_list": "cpp",
         "fstream": "cpp",
         "functional": "cpp",
+        "future": "cpp",
         "initializer_list": "cpp",
         "iomanip": "cpp",
         "ios": "cpp",
-        "iosfwd": "cpp",
         "iostream": "cpp",
         "istream": "cpp",
         "iterator": "cpp",
@@ -103,6 +51,7 @@
         "locale": "cpp",
         "map": "cpp",
         "memory": "cpp",
+        "memory_resource": "cpp",
         "mutex": "cpp",
         "new": "cpp",
         "numeric": "cpp",
@@ -110,7 +59,9 @@
         "ostream": "cpp",
         "queue": "cpp",
         "random": "cpp",
+        "ranges": "cpp",
         "ratio": "cpp",
+        "regex": "cpp",
         "set": "cpp",
         "shared_mutex": "cpp",
         "source_location": "cpp",
@@ -121,17 +72,18 @@
         "stdfloat": "cpp",
         "stop_token": "cpp",
         "streambuf": "cpp",
-        "string": "cpp",
+        "strstream": "cpp",
         "system_error": "cpp",
         "thread": "cpp",
         "tuple": "cpp",
         "type_traits": "cpp",
+        "typeindex": "cpp",
         "typeinfo": "cpp",
         "unordered_map": "cpp",
         "unordered_set": "cpp",
         "utility": "cpp",
+        "valarray": "cpp",
         "variant": "cpp",
-        "vector": "cpp",
         "xfacet": "cpp",
         "xhash": "cpp",
         "xiosbase": "cpp",
@@ -146,6 +98,8 @@
         "xstring": "cpp",
         "xtr1common": "cpp",
         "xtree": "cpp",
-        "xutility": "cpp"
+        "xutility": "cpp",
+        "*.rh": "cpp",
+        "byte": "cpp"
     }
 }

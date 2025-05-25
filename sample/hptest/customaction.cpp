@@ -133,14 +133,15 @@ MaaBool my_action(
     hpBarRect &= cv::Rect(0, 0, image.cols, image.rows);
     int hp = DetectHPBarPercent(image, hpBarRect);
     if (hp <= 60) {
+        MaaControllerPostPressKey(controller, 114); // 按F3吃蛋糕
     }
 
-        json::value pp_override { { "MyColorMatching",
-                                json::object {
-                                    { "recognition", "ColorMatch" },
-                                    { "lower", json::array { 100, 100, 100 } },
-                                    { "upper", json::array { 255, 255, 255 } },
-                                } } };
+    // 识别是否正在攻击
+
+    // 如果在休息则按F2起身，寻找目标攻击
+
+    // 范围内没有目标,尝试回原坐标
+    json::value pp_override { { "寻找坐标", json::object { { "recognition", "OCR" }, { "roi", json::array { 659, 155, 53, 17 } } } } };
     std::string pp_override_str = pp_override.to_string();
 
     MaaRecoId my_reco_id = MaaContextRunRecognition(context, "MyColorMatching", pp_override_str.c_str(), image_buffer);
@@ -148,6 +149,7 @@ MaaBool my_action(
 
     auto detail_string = MaaStringBufferGet(out_detail);
     std::ignore = detail_string;
+    // 如果距离原坐标很近，按INSERT键休息
 
     MaaImageBufferDestroy(image_buffer);
     MaaRectDestroy(out_box);

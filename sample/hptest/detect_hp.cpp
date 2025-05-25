@@ -55,16 +55,17 @@ int main(int argc, char** argv)
     }
 
     // Pascal VOC 标注框
-    int xmin = 74;
-    int ymin = 24;
-    int xmax = 187;
-    int ymax = 34;
+    // int xmin = 74;
+    // int ymin = 24;
+    // int xmax = 187;
+    // int ymax = 34;
 
-    int width = xmax - xmin;
-    int height = ymax - ymin;
+    // int width = xmax - xmin;
+    // int height = ymax - ymin;
 
     // 创建 ROI 区域
-    cv::Rect hpBarRect(xmin, ymin, width, height);
+    // cv::Rect hpBarRect(xmin, ymin, width, height);
+    cv::Rect hpBarRect(659, 155, 64, 17);
     hpBarRect &= cv::Rect(0, 0, image.cols, image.rows);
     int hpPercent = DetectHPBarPercent(image, hpBarRect);
     // cv::Mat hpBar = image(hpBarRect);
