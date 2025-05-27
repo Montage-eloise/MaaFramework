@@ -55,7 +55,7 @@ inline static void sort_by_random_(ResultsVec& results)
 }
 
 template <typename ResultsVec>
-inline static void sort_by_center_distance_(ResultsVec& results, int image_width, int image_height,float max_center_distance)  
+inline static void sort_by_center_distance_(ResultsVec& results, int image_width, int image_height, float max_center_distance)
 {
     const float center_x = image_width * 0.5f;
     const float center_y = image_height * 0.5f;
@@ -63,14 +63,16 @@ inline static void sort_by_center_distance_(ResultsVec& results, int image_width
 
     // 先筛选在 max_center_distance 范围内的目标
     results.erase(
-        std::remove_if(results.begin(), results.end(), [center_x, center_y, max_dist_sq](const auto& r) {
-            const float cx = r.box.x + r.box.width * 0.5f;
-            const float cy = r.box.y + r.box.height * 0.5f;
-            const float dist_sq = (cx - center_x) * (cx - center_x) + (cy - center_y) * (cy - center_y);
-            return dist_sq > max_dist_sq;
-        }),
-        results.end()
-    );
+        std::remove_if(
+            results.begin(),
+            results.end(),
+            [center_x, center_y, max_dist_sq](const auto& r) {
+                const float cx = r.box.x + r.box.width * 0.5f;
+                const float cy = r.box.y + r.box.height * 0.5f;
+                const float dist_sq = (cx - center_x) * (cx - center_x) + (cy - center_y) * (cy - center_y);
+                return dist_sq > max_dist_sq;
+            }),
+        results.end());
 
     std::ranges::sort(results, [center_x, center_y](const auto& lhs, const auto& rhs) {
         const float lhs_cx = lhs.box.x + lhs.box.width * 0.5f;
@@ -86,7 +88,7 @@ inline static void sort_by_center_distance_(ResultsVec& results, int image_width
 }
 
 template <typename ResultsVec>
-inline static void sort_by_center_distance_(ResultsVec& results, int image_width, int image_height)  
+inline static void sort_by_center_distance_(ResultsVec& results, int image_width, int image_height)
 {
     const float cx = image_width * 0.5f;
     const float cy = image_height * 0.5f;

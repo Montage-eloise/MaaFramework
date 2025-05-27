@@ -115,10 +115,13 @@ Point ReturnToStart(const Point& current, const Point& start, const Point& scree
     double dx = start.x - current.x;
     double dy = start.y - current.y;
     double len = std::sqrt(dx * dx + dy * dy);
+    double logicToPixelScale = 38.0;
     // 阈值判断：距离太大，认为异常，直接返回空
-    if (len == 0 || len > maxOffsetThreshold) {
+    if (len == 0 || len > maxOffsetThreshold * logicToPixelScale) {
         return screenCenter;
     }
+
+    double len_px = len * logicToPixelScale;
     double nx = dx / len;
     double ny = dy / len;
 
@@ -128,8 +131,8 @@ Point ReturnToStart(const Point& current, const Point& start, const Point& scree
     const double maxDistance = 120.0;
 
     double baseDistance = maxDistance;
-    if (len < screenDiagonal) {
-        baseDistance = minDistance + (maxDistance - minDistance) * (len / screenDiagonal);
+    if (len_px < screenDiagonal) {
+        baseDistance = minDistance + (maxDistance - minDistance) * (len_px / screenDiagonal);
     }
 
     // 用 baseDistance ± 10 生成随机点击距离
@@ -236,7 +239,7 @@ MaaBool my_action(
 
     auto detail_string = MaaStringBufferGet(out_detail);
     auto start = custom_action_param;
-    auto pt = ProcessDetailTextAndClick(detail_string, start, { 400, 300});
+    auto pt = ProcessDetailTextAndClick(detail_string, start, { 400, 300 });
 
     if (pt) {
         std::cout << "Click point: " << pt->x << ", " << pt->y << std::endl;
