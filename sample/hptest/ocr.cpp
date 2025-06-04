@@ -75,6 +75,7 @@ int main()
         destroy();
         return -1;
     }
+    MaaResourceRegisterCustomRecognition(resource_handle, "MyReco", my_reco, nullptr);
     MaaResourceRegisterCustomAction(resource_handle, "MyAct", &my_action, nullptr);
 
     json::value task_param {
@@ -208,6 +209,55 @@ std::optional<Point> ProcessDetailTextAndClick(const char* detail_string, const 
     return std::nullopt; // 返回默认值
 }
 
+static bool check_ocr(const char* detail_string)
+{
+    try {
+        auto result = json::parse(detail_string);
+
+        if (result && result->contains("best") && !(*result)["best"].is_null()) {
+            const auto& best = (*result)["best"];
+            if (best.contains("text") && best.at("text").is_string()) {
+                return true;
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Failed to parse or process JSON: " << e.what() << "\n";
+        return false;
+    }
+    return false;
+}
+
+MaaBool my_reco(
+    MaaContext* context,
+    MaaTaskId task_id,
+    const char* node_name,
+    const char* custom_recognition_name,
+    const char* custom_recognition_param,
+    const MaaImageBuffer* image,
+    const MaaRect* roi,
+    void* trans_arg,
+    /* out */ MaaRect* out_box,
+    /* out */ MaaStringBuffer* out_detail)
+{
+    // 修改为目标ROI
+    cv::Rect hpBarRect(659, 155, 64, 17);
+
+    cv::Rect scaled = ScaleRect(hpBarRect, { 800, 600 }, { MaaImageBufferWidth(image), MaaImageBufferHeight(image) });
+    json::array roi_array = { scaled.x, scaled.y, scaled.width, scaled.height };
+
+    json::value pp_override { { "BATTLE", json::object { { "recognition", "OCR" }, { "roi", roi_array } } } };
+    std::string pp_override_str = pp_override.to_string();
+
+    MaaRecoId my_reco_id = MaaContextRunRecognition(context, "BATTLE", pp_override_str.c_str(), image);
+
+    auto tasker = MaaContextGetTasker(context);
+    MaaTaskerGetRecognitionDetail(tasker, my_reco_id, nullptr, nullptr, nullptr, out_box, out_detail, nullptr, nullptr);
+
+    auto detail_string = MaaStringBufferGet(out_detail);
+    return check_ocr(detail_string);
+}
+
 MaaBool my_action(
     MaaContext* context,
     MaaTaskId task_id,
@@ -226,6 +276,7 @@ MaaBool my_action(
     auto out_box = MaaRectCreate();
     auto out_detail = MaaStringBufferCreate();
     cv::Mat image = image_buffer->get();
+    // 坐标OCR
     cv::Rect hpBarRect(659, 155, 64, 17);
     cv::Rect scaled = ScaleRect(hpBarRect, { 800, 600 }, { image.cols, image.rows });
     json::array roi_array = { scaled.x, scaled.y, scaled.width, scaled.height };
