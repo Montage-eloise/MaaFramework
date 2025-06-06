@@ -83,10 +83,13 @@ Point ReturnToStart(const Point& current, const Point& start, const Point& scree
     double dx = start.x - current.x;
     double dy = start.y - current.y;
     double len = std::sqrt(dx * dx + dy * dy);
+    double logicToPixelScale = 38.0;
     // 阈值判断：距离太大，认为异常，直接返回空
-    if (len == 0 || len > maxOffsetThreshold) {
+    if (len == 0 || len > maxOffsetThreshold * logicToPixelScale) {
         return screenCenter;
     }
+
+    double len_px = len * logicToPixelScale;
     double nx = dx / len;
     double ny = dy / len;
 
@@ -96,17 +99,111 @@ Point ReturnToStart(const Point& current, const Point& start, const Point& scree
     const double maxDistance = 120.0;
 
     double baseDistance = maxDistance;
-    if (len < screenDiagonal) {
-        baseDistance = minDistance + (maxDistance - minDistance) * (len / screenDiagonal);
+    if (len_px < screenDiagonal) {
+        baseDistance = minDistance + (maxDistance - minDistance) * (len_px / screenDiagonal);
     }
 
     // 用 baseDistance ± 10 生成随机点击距离
     std::uniform_real_distribution<double> dist(baseDistance - 10.0, baseDistance + 10.0);
     double clickDistance = dist(rng);
 
-    Point clickPoint = { screenCenter.x + nx * clickDistance, screenCenter.y + ny * clickDistance };
+    Point clickPoint = { (int)(screenCenter.x + nx * clickDistance), int(screenCenter.y + ny * clickDistance) };
 
     return clickPoint;
+}
+
+// 工具函数：从字符串 "x,y" 提取 Point
+Point ParseTextToPoint(const std::string& text)
+{
+    Point pt {};
+    std::string number;
+    std::vector<std::string> parts;
+
+    for (char c : text) {
+        if (isdigit(c)) {
+            number += c;
+        }
+        else if (!number.empty()) {
+            parts.push_back(number);
+            number.clear();
+        }
+    }
+    if (!number.empty()) {
+        parts.push_back(number);
+    }
+
+    if (parts.size() >= 2) {
+        try {
+            pt.x = std::stoi(parts[0]);
+            pt.y = std::stoi(parts[1]);
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Failed to parse OCR point: " << e.what() << std::endl;
+        }
+    }
+    else {
+        std::cerr << "OCR point parse failed: not enough parts\n";
+    }
+
+    return pt;
+}
+
+// 主处理函数
+std::optional<Point> ProcessDetailTextAndClick(const char* detail_string, const char* start, const Point& screenCenter)
+{
+    try {
+        auto result = json::parse(detail_string);
+
+        if (result && result->contains("best") && !(*result)["best"].is_null()) {
+            const auto& best = (*result)["best"];
+            if (best.contains("text") && best.at("text").is_string()) {
+                std::string text = best.at("text").as_string();
+                Point current = ParseTextToPoint(text);
+                Point startPoint = ParseTextToPoint(start);
+                return ReturnToStart(current, startPoint, screenCenter);
+            }
+            else {
+                std::cerr << "best.text not found or not a string.\n";
+            }
+        }
+        else {
+            std::cerr << "No 'best' found or it is null.\n";
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Failed to parse or process JSON: " << e.what() << "\n";
+    }
+    return std::nullopt; // 返回默认值
+}
+
+static cv::Rect ScaleRect(const cv::Rect& rect, cv::Size fromSize, cv::Size toSize)
+{
+    double scaleX = static_cast<double>(toSize.width) / fromSize.width;
+    double scaleY = static_cast<double>(toSize.height) / fromSize.height;
+    return cv::Rect(
+        static_cast<int>(rect.x * scaleX),
+        static_cast<int>(rect.y * scaleY),
+        static_cast<int>(rect.width * scaleX),
+        static_cast<int>(rect.height * scaleY));
+}
+
+static bool check_ocr(const char* detail_string)
+{
+    try {
+        auto result = json::parse(detail_string);
+
+        if (result && result->contains("best") && !(*result)["best"].is_null()) {
+            const auto& best = (*result)["best"];
+            if (best.contains("text") && best.at("text").is_string()) {
+                return true;
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Failed to parse or process JSON: " << e.what() << "\n";
+        return false;
+    }
+    return false;
 }
 
 MaaBool my_action(
@@ -137,19 +234,63 @@ MaaBool my_action(
     }
 
     // 识别是否正在攻击
+    // 修改为目标ROI
+    cv::Rect hpBarRect(659, 155, 64, 17);
 
-    // 如果在休息则按F2起身，寻找目标攻击
+    cv::Rect scaled = ScaleRect(hpBarRect, { 800, 600 }, { image.cols, image.rows });
+    json::array roi_array = { scaled.x, scaled.y, scaled.width, scaled.height };
 
-    // 范围内没有目标,尝试回原坐标
-    json::value pp_override { { "寻找坐标", json::object { { "recognition", "OCR" }, { "roi", json::array { 659, 155, 53, 17 } } } } };
+    json::value pp_override { { "ATTACKING", json::object { { "recognition", "OCR" }, { "roi", roi_array } } } };
     std::string pp_override_str = pp_override.to_string();
 
-    MaaRecoId my_reco_id = MaaContextRunRecognition(context, "MyColorMatching", pp_override_str.c_str(), image_buffer);
-    MaaTaskerGetRecognitionDetail(tasker, my_reco_id, nullptr, nullptr, nullptr, out_box, out_detail, nullptr, nullptr);
+    MaaRecoId my_reco_id = MaaContextRunRecognition(context, "ATTACKING", pp_override_str.c_str(), image_buffer);
+
+    auto tasker = MaaContextGetTasker(context);
+    // TO TEST
+    MaaBool hit = false;
+    MaaTaskerGetRecognitionDetail(tasker, my_reco_id, nullptr, nullptr, &hit, nullptr, nullptr, nullptr, nullptr);
+    if (hit) {
+        return true;
+    }
 
     auto detail_string = MaaStringBufferGet(out_detail);
-    std::ignore = detail_string;
-    // 如果距离原坐标很近，按INSERT键休息
+    auto check = check_ocr(detail_string);
+    if (check) {
+        return true;
+    }
+    // 如果在休息则按F2起身，寻找目标攻击
+    json::value pp_override { { "BATTLE", json::object { { "recognition", "NeuralNetworkDetect" }, { "model", "best.onnx" } } } };
+    std::string pp_override_str = pp_override.to_string();
+    my_reco_id = MaaContextRunRecognition(context, "BATTLE", pp_override_str.c_str(), image_buffer);
+    MaaTaskerGetRecognitionDetail(tasker, my_reco_id, nullptr, nullptr, &hit, out_box, nullptr, nullptr, nullptr);
+    if (hit) {
+        // 需要增加休息判断
+        MaaControllerPostPressKey(controller, 46); // 按F2起身
+        MaaControllerPostClick(controller, out_box->x, out_box->y);
+        return true;
+    }
+    // 范围内没有目标,尝试回原坐标
+    // 坐标OCR
+    cv::Rect hpBarRect(659, 155, 64, 17);
+    cv::Rect scaled = ScaleRect(hpBarRect, { 800, 600 }, { image.cols, image.rows });
+    json::array roi_array = { scaled.x, scaled.y, scaled.width, scaled.height };
+
+    json::value pp_override { { "POS", json::object { { "recognition", "OCR" }, { "roi", roi_array } } } };
+    std::string pp_override_str = pp_override.to_string();
+
+    my_reco_id = MaaContextRunRecognition(context, "POS", pp_override_str.c_str(), image_buffer);
+    MaaTaskerGetRecognitionDetail(tasker, my_reco_id, nullptr, nullptr, nullptr, out_box, out_detail, nullptr, nullptr);
+    detail_string = MaaStringBufferGet(out_detail);
+    auto start = custom_action_param;
+    auto pt = ProcessDetailTextAndClick(detail_string, start, { 400, 300 });
+
+    if (pt) {
+        std::cout << "Click point: " << pt->x << ", " << pt->y << std::endl;
+        MaaControllerPostClick(controller, pt->x, pt->y);
+    } // 如果距离原坐标很近，按INSERT键休息
+    else {
+        MaaControllerPostPressKey(controller, 45); // 按Insert键休息
+    }
 
     MaaImageBufferDestroy(image_buffer);
     MaaRectDestroy(out_box);
