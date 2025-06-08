@@ -32,6 +32,19 @@ MaaBool my_action(
     const MaaRect* box,
     void* trans_arg);
 
+// 读取文件到字符串
+std::string ReadFileToString(const std::string& filename)
+{
+    std::ifstream ifs(filename);
+    if (!ifs) {
+        std::cout << "Failed to open file: " << filename << std::endl;
+        return "";
+    }
+    std::ostringstream oss;
+    oss << ifs.rdbuf();
+    return oss.str();
+}
+
 int main()
 {
     std::string user_path = "./";
@@ -42,14 +55,6 @@ int main()
 
     auto resource_handle = MaaResourceCreate(nullptr, nullptr);
     std::string resource_dir = "./resource";
-
-    // auto controller_handle = MaaDbgControllerCreate(
-    //     testing_path.string().c_str(),
-    //     result_path.string().c_str(),
-    //     MaaDbgControllerType_CarouselImage,
-    //     "{}",
-    //     nullptr,
-    //     nullptr);
     auto res_id = MaaResourcePostBundle(resource_handle, resource_dir.c_str());
     MaaControllerWait(controller_handle, ctrl_id);
     MaaResourceWait(resource_handle, res_id);
@@ -62,33 +67,71 @@ int main()
         MaaResourceDestroy(resource_handle);
         MaaControllerDestroy(controller_handle);
     };
-    // {
-    //     auto failed_id = MaaTaskerPostTask(tasker_handle, "_NotExists_", "{}");
-    //     auto failed_status = MaaTaskerWait(tasker_handle, failed_id);
-    //     if (failed_id == MaaInvalidId || failed_status != MaaStatus_Failed) {
-    //         std::cout << "Failed to detect invalid task" << std::endl;
-    //         return false;
-    //     }
-    // }
     if (!MaaTaskerInited(tasker_handle)) {
         std::cout << "Failed to init MAA" << std::endl;
         destroy();
         return -1;
     }
-    MaaResourceRegisterCustomRecognition(resource_handle, "MyReco", my_reco, nullptr);
+    // MaaResourceRegisterCustomRecognition(resource_handle, "MyReco", my_reco, nullptr);
     MaaResourceRegisterCustomAction(resource_handle, "MyAct", &my_action, nullptr);
 
-    json::value task_param {
-        { "MyTask", json::object { { "action", "Custom" }, { "custom_action", "MyAct" }, { "custom_action_param", "2158,2782" } } }
-    };
-    std::string task_param_str = task_param.to_string();
+    //{ "custom_action_param", "442,1594" }
+    // json::value task_param { { "MyTask",
+    //                            json::object { { "recognition", "DirectHit" },
+    //                                           { "action", "Custom" },
+    //                                           { "custom_action", "MyAct" },
+    //                                           { "custom_action_param", "2158,2782" } } } };
 
-    auto task_id = MaaTaskerPostTask(tasker_handle, "MyTask", task_param_str.c_str());
+    auto json_text = ReadFileToString("./ocr.json");
+    // std::string task_param_str = json_text.to_string();
+
+    auto task_id = MaaTaskerPostTask(tasker_handle, "Battle", json_text.c_str());
     auto status = MaaTaskerWait(tasker_handle, task_id);
 
     destroy();
 
     return status == MaaStatus_Succeeded;
+}
+
+static bool is_seating = false;
+
+// 读取血条百分比
+int DetectHPBarPercent(const cv::Mat& image, cv::Rect roi)
+{
+    cv::Mat hpBar = image(roi);
+    cv::Mat hsv;
+    cv::cvtColor(hpBar, hsv, cv::COLOR_BGR2HSV);
+
+    // 放宽红色 HSV 范围（支持暗红）
+    cv::Mat mask1, mask2, redMask;
+    cv::inRange(hsv, cv::Scalar(0, 50, 20), cv::Scalar(10, 255, 255), mask1);
+    cv::inRange(hsv, cv::Scalar(160, 50, 20), cv::Scalar(180, 255, 255), mask2);
+    redMask = mask1 | mask2;
+
+    // DEBUG：显示红色像素总数
+    // std::cout << "Red pixels detected: " << cv::countNonZero(redMask) << std::endl;
+
+    // 标记每一列是否为“红列”
+    std::vector<bool> redCols(redMask.cols, false);
+    for (int x = 0; x < redMask.cols; ++x) {
+        int nonZero = cv::countNonZero(redMask.col(x));
+        redCols[x] = (nonZero > 2); // 宽松阈值
+    }
+
+    // 计算最长连续红列
+    int maxLen = 0, currLen = 0;
+    for (bool isRed : redCols) {
+        if (isRed) {
+            currLen++;
+            maxLen = std::max(maxLen, currLen);
+        }
+        else {
+            currLen = 0;
+        }
+    }
+
+    int percent = static_cast<int>((double)maxLen / redMask.cols * 100);
+    return std::clamp(percent, 0, 100);
 }
 
 static cv::Rect ScaleRect(const cv::Rect& rect, cv::Size fromSize, cv::Size toSize)
@@ -111,29 +154,32 @@ struct Point
 static std::mt19937 rng(std::random_device {}()); // 静态随机数生成器，初始化一次
 
 // 模拟返回起点点击
-Point ReturnToStart(const Point& current, const Point& start, const Point& screenCenter, double maxOffsetThreshold = 1000.0)
+std::optional<Point> ReturnToStart(const Point& current, const Point& start, const Point& screenCenter, double maxOffsetThreshold = 1000.0)
 {
     double dx = start.x - current.x;
     double dy = start.y - current.y;
     double len = std::sqrt(dx * dx + dy * dy);
-    double logicToPixelScale = 38.0;
+    constexpr double logicToPixelScale = 38.0;
     // 阈值判断：距离太大，认为异常，直接返回空
-    if (len == 0 || len > maxOffsetThreshold * logicToPixelScale) {
-        return screenCenter;
+    if (len <= 4 || len > maxOffsetThreshold * logicToPixelScale) {
+        return std::nullopt;
     }
 
     double len_px = len * logicToPixelScale;
     double nx = dx / len;
     double ny = dy / len;
 
-    double screenDiagonal = std::sqrt(screenCenter.x * 2 * screenCenter.x * 2 + screenCenter.y * 2 * screenCenter.y * 2);
+    double screenDiagonal = std::sqrt(screenCenter.x * screenCenter.x + screenCenter.y * screenCenter.y);
 
-    const double minDistance = 20.0;
-    const double maxDistance = 120.0;
+    double minDistance = 20;
+    double maxDistance = 200;
 
     double baseDistance = maxDistance;
     if (len_px < screenDiagonal) {
         baseDistance = minDistance + (maxDistance - minDistance) * (len_px / screenDiagonal);
+    }
+    else {
+        baseDistance = maxDistance;
     }
 
     // 用 baseDistance ± 10 生成随机点击距离
@@ -174,6 +220,22 @@ Point ParseTextToPoint(const std::string& text)
             std::cerr << "Failed to parse OCR point: " << e.what() << std::endl;
         }
     }
+    else if (parts.size() == 1) {
+        std::string num_str = parts[0];
+        if (text.length() == 8) {
+            // 尝试按固定宽度切分一个长整数（如12345678 → 1234, 5678）
+            pt.x = std::stoi(num_str.substr(0, num_str.length() / 2));
+            pt.y = std::stoi(num_str.substr(num_str.length() / 2));
+        }
+        if (text.length() == 7) {
+            // 尝试按固定宽度切分一个长整数（如1234567 → 123, 5678）
+            pt.x = std::stoi(num_str.substr(0, 3));
+            pt.y = std::stoi(num_str.substr(3));
+        }
+        else {
+            std::cerr << "Not enough digits to split into x and y\n";
+        }
+    }
     else {
         std::cerr << "OCR point parse failed: not enough parts\n";
     }
@@ -192,6 +254,10 @@ std::optional<Point> ProcessDetailTextAndClick(const char* detail_string, const 
             if (best.contains("text") && best.at("text").is_string()) {
                 std::string text = best.at("text").as_string();
                 Point current = ParseTextToPoint(text);
+                if (current.x == 0 && current.y == 0) {
+                    std::cerr << "Parsed point is (0, 0), skipping click.\n";
+                    return Point { 400, 300 };
+                }
                 Point startPoint = ParseTextToPoint(start);
                 return ReturnToStart(current, startPoint, screenCenter);
             }
@@ -228,36 +294,6 @@ static bool check_ocr(const char* detail_string)
     return false;
 }
 
-MaaBool my_reco(
-    MaaContext* context,
-    MaaTaskId task_id,
-    const char* node_name,
-    const char* custom_recognition_name,
-    const char* custom_recognition_param,
-    const MaaImageBuffer* image,
-    const MaaRect* roi,
-    void* trans_arg,
-    /* out */ MaaRect* out_box,
-    /* out */ MaaStringBuffer* out_detail)
-{
-    // 修改为目标ROI
-    cv::Rect hpBarRect(659, 155, 64, 17);
-
-    cv::Rect scaled = ScaleRect(hpBarRect, { 800, 600 }, { MaaImageBufferWidth(image), MaaImageBufferHeight(image) });
-    json::array roi_array = { scaled.x, scaled.y, scaled.width, scaled.height };
-
-    json::value pp_override { { "BATTLE", json::object { { "recognition", "OCR" }, { "roi", roi_array } } } };
-    std::string pp_override_str = pp_override.to_string();
-
-    MaaRecoId my_reco_id = MaaContextRunRecognition(context, "BATTLE", pp_override_str.c_str(), image);
-
-    auto tasker = MaaContextGetTasker(context);
-    MaaTaskerGetRecognitionDetail(tasker, my_reco_id, nullptr, nullptr, nullptr, out_box, out_detail, nullptr, nullptr);
-
-    auto detail_string = MaaStringBufferGet(out_detail);
-    return check_ocr(detail_string);
-}
-
 MaaBool my_action(
     MaaContext* context,
     MaaTaskId task_id,
@@ -275,44 +311,105 @@ MaaBool my_action(
 
     auto out_box = MaaRectCreate();
     auto out_detail = MaaStringBufferCreate();
-    cv::Mat image = image_buffer->get();
-    // 坐标OCR
-    cv::Rect hpBarRect(659, 155, 64, 17);
-    cv::Rect scaled = ScaleRect(hpBarRect, { 800, 600 }, { image.cols, image.rows });
-    json::array roi_array = { scaled.x, scaled.y, scaled.width, scaled.height };
 
-    json::value pp_override { { "POS", json::object { { "recognition", "OCR" }, { "roi", roi_array } } } };
-    std::string pp_override_str = pp_override.to_string();
+    auto destroy = [&]() {
+        MaaImageBufferDestroy(image_buffer);
+        MaaRectDestroy(out_box);
+        MaaStringBufferDestroy(out_detail);
+    };
 
-    MaaRecoId my_reco_id = MaaContextRunRecognition(context, "POS", pp_override_str.c_str(), image_buffer);
+    const cv::Mat image = image_buffer->get();
 
-    MaaTaskerGetRecognitionDetail(tasker, my_reco_id, nullptr, nullptr, nullptr, out_box, out_detail, nullptr, nullptr);
-
-    auto detail_string = MaaStringBufferGet(out_detail);
-    auto start = custom_action_param;
-    auto pt = ProcessDetailTextAndClick(detail_string, start, { 400, 300 });
-
-    if (pt) {
-        std::cout << "Click point: " << pt->x << ", " << pt->y << std::endl;
-        MaaControllerPostClick(controller, pt->x, pt->y);
+    // 1. 检查血条
+    {
+        cv::Rect hpBarRect(74, 24, 112, 10);
+        auto scaledRect = ScaleRect(hpBarRect, { 800, 600 }, { image.cols, image.rows });
+        int hp = DetectHPBarPercent(image, scaledRect);
+        if (hp <= 60) {
+            std::cout << "HP is low: " << hp << "%, eating cake..." << std::endl;
+            MaaControllerPostPressKey(controller, 114); // F3 吃蛋糕
+        }
     }
-    // 可视化
-    cv::rectangle(image, scaled, cv::Scalar(0, 255, 0), 2);
-    cv::putText(
-        image,
-        std::to_string(1) + "%",
-        cv::Point(scaled.x, scaled.y - 5),
-        cv::FONT_HERSHEY_SIMPLEX,
-        0.5,
-        cv::Scalar(255, 255, 255),
-        1);
 
-    cv::imshow("HP Detection", image);
-    cv::waitKey(0);
-    MaaImageBufferDestroy(image_buffer);
-    MaaRectDestroy(out_box);
-    MaaStringBufferDestroy(out_detail);
+    // 2. OCR 识别是否正在攻击
+    {
+        cv::Rect attackBarRect(340, 1, 120, 20);
+        auto scaled = ScaleRect(attackBarRect, { 800, 600 }, { image.cols, image.rows });
+        json::array roi_array = { scaled.x, scaled.y, scaled.width, scaled.height };
 
+        json::value override = { { "ATTACKING",
+                                   { { "recognition", "OCR" }, { "roi", roi_array }, { "threshold", 0.6 }, { "only_rec", true } } } };
+
+        std::string override_str = override.to_string();
+        auto id = MaaContextRunRecognition(context, "ATTACKING", override_str.c_str(), image_buffer);
+        if (id != MaaInvalidId) {
+            destroy();
+            return true;
+        }
+
+        const char* detail = MaaStringBufferGet(out_detail);
+        if (check_ocr(detail)) {
+            destroy();
+            return true;
+        }
+    }
+
+    // 3. 使用模型识别是否处于战斗状态
+    {
+        json::value override = { { "BATTLEING",
+                                   { { "recognition", "NeuralNetworkDetect" },
+                                     { "model", "hunter.onnx" },
+                                     { "threshold", 0.4 },
+                                     { "order_by", "area" },
+                                     { "labels", "BloodHunter" },
+                                     { "expected", { 0 } } } } };
+
+        std::string override_str = override.to_string();
+        auto id = MaaContextRunRecognition(context, "BATTLEING", override_str.c_str(), image_buffer);
+        MaaBool hit = false;
+
+        MaaTaskerGetRecognitionDetail(tasker, id, nullptr, nullptr, &hit, out_box, nullptr, nullptr, nullptr);
+
+        if (hit && id != MaaInvalidId) {
+            if (is_seating) {
+                MaaControllerPostPressKey(controller, 113); // F2 起身
+                is_seating = false;
+            }
+
+            MaaControllerPostClick(controller, out_box->x + out_box->width / 2, out_box->y + out_box->height / 2);
+
+            destroy();
+            return true;
+        }
+    }
+
+    // 4. 识别坐标文字进行点击或休息
+    {
+        cv::Rect posRect(659, 155, 64, 17);
+        auto scaled = ScaleRect(posRect, { 800, 600 }, { image.cols, image.rows });
+        json::array roi_array = { scaled.x, scaled.y, scaled.width, scaled.height };
+
+        json::value override = { { "POS", { { "recognition", "OCR" }, { "roi", roi_array } } } };
+
+        std::string override_str = override.to_string();
+        auto id = MaaContextRunRecognition(context, "POS", override_str.c_str(), image_buffer);
+
+        MaaTaskerGetRecognitionDetail(tasker, id, nullptr, nullptr, nullptr, out_box, out_detail, nullptr, nullptr);
+        const char* detail = MaaStringBufferGet(out_detail);
+
+        auto pt = ProcessDetailTextAndClick(detail, custom_action_param, { 400, 300 });
+        if (pt) {
+            std::cout << "Click point: " << pt->x << ", " << pt->y << std::endl;
+            MaaControllerPostClick(controller, pt->x, pt->y);
+        }
+        else {
+            std::cout << "Distance is too close to the original position, resting..." << std::endl;
+            MaaControllerPostPressKey(controller, 45); // Insert 键休息
+            is_seating = true;
+        }
+    }
+
+    destroy();
     return true;
 }
 
