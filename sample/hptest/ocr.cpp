@@ -76,14 +76,15 @@ int main()
     MaaResourceRegisterCustomAction(resource_handle, "MyAct", &my_action, nullptr);
 
     //{ "custom_action_param", "442,1594" }
-    // json::value task_param { { "MyTask",
+    // "custom_action_param", "2158,2782" }
+    // json::value task_param { { "Battle",
     //                            json::object { { "recognition", "DirectHit" },
     //                                           { "action", "Custom" },
     //                                           { "custom_action", "MyAct" },
-    //                                           { "custom_action_param", "2158,2782" } } } };
+    //                                           { "custom_action_param", "442,1594" } } } };
+    // std::string json_text = task_param.to_string();
 
     auto json_text = ReadFileToString("./ocr.json");
-    // std::string task_param_str = json_text.to_string();
 
     auto task_id = MaaTaskerPostTask(tasker_handle, "Battle", json_text.c_str());
     auto status = MaaTaskerWait(tasker_handle, task_id);
@@ -96,6 +97,13 @@ int main()
 static bool is_seating = false;
 static int try_time = 0;
 static int seating_time = 0;
+
+struct Point
+{
+    int x;
+    int y;
+};
+
 static Point last_click_point = { 0, 0 };
 
 // 读取血条百分比
@@ -148,12 +156,6 @@ static cv::Rect ScaleRect(const cv::Rect& rect, cv::Size fromSize, cv::Size toSi
         static_cast<int>(rect.height * scaleY));
 }
 
-struct Point
-{
-    int x;
-    int y;
-};
-
 static std::mt19937 rng(std::random_device {}()); // 静态随机数生成器，初始化一次
 
 // 模拟返回起点点击
@@ -174,8 +176,8 @@ std::optional<Point> ReturnToStart(const Point& current, const Point& start, con
 
     double screenDiagonal = std::sqrt(screenCenter.x * screenCenter.x + screenCenter.y * screenCenter.y);
 
-    double minDistance = 20;
-    double maxDistance = 200;
+    double minDistance = logicToPixelScale * 2;
+    double maxDistance = logicToPixelScale * 6;
 
     double baseDistance = maxDistance;
     if (len_px < screenDiagonal) {
@@ -343,7 +345,7 @@ MaaBool my_action(
 
     // 2. OCR 识别是否正在攻击
     {
-        if (try_time < 3) {
+        if (try_time < 4) {
             cv::Rect attackBarRect(340, 1, 120, 20);
             auto scaled = ScaleRect(attackBarRect, { 800, 600 }, { image.cols, image.rows });
             json::array roi_array = { scaled.x, scaled.y, scaled.width, scaled.height };
@@ -371,12 +373,17 @@ MaaBool my_action(
 
     // 3. 使用模型识别寻找目标
     {
+        cv::Rect attackBarRect(0, 0, 750, 560);
+        auto scaled = ScaleRect(attackBarRect, { 800, 600 }, { image.cols, image.rows });
+        json::array roi_array = { scaled.x, scaled.y, scaled.width, scaled.height };
+
         json::value override = { { "BATTLEING",
                                    { { "recognition", "NeuralNetworkDetect" },
                                      { "model", "hunter.onnx" },
-                                     { "threshold", 0.4 },
+                                     { "threshold", 0.6 },
                                      { "order_by", "area" },
                                      { "labels", "BloodHunter" },
+                                     { "roi", roi_array },
                                      { "expected", { 0 } } } } };
 
         std::string override_str = override.to_string();
@@ -392,7 +399,17 @@ MaaBool my_action(
             }
 
             MaaControllerPostClick(controller, out_box->x + out_box->width / 2, out_box->y + out_box->height / 2);
-
+            // cv::Rect pt_rect = ScaleRect({ (int)pt->x, (int)pt->y, 10, 10 }, { 800, 600 }, { image.cols, image.rows });
+            // 可视化
+            // cv::rectangle(image, cv::Rect(out_box->x, out_box->y, out_box->width, out_box->height), cv::Scalar(0, 255, 0), 2);
+            // cv::putText(
+            //     image,
+            //     std::to_string(1) + "%",
+            //     cv::Point(out_box->x, out_box->y - 5),
+            //     cv::FONT_HERSHEY_SIMPLEX,
+            //     0.5,
+            //     cv::Scalar(255, 255, 255),
+            //     1);
             destroy();
             return true;
         }
@@ -423,6 +440,10 @@ MaaBool my_action(
             MaaControllerPostPressKey(controller, 45); // Insert 键休息
             is_seating = true;
         }
+        // cv::circle(image, { pt->x, pt->y }, 3, cv::Scalar(0, 0, 255),
+        //            -1); // -1 表示填充圆
+        // cv::imshow("HP Detection", image);
+        // cv::waitKey(0);
     }
 
     destroy();
