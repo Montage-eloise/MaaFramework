@@ -94,6 +94,9 @@ int main()
 }
 
 static bool is_seating = false;
+static int try_time = 0;
+static int seating_time = 0;
+static Point last_click_point = { 0, 0 };
 
 // 读取血条百分比
 int DetectHPBarPercent(const cv::Mat& image, cv::Rect roi)
@@ -162,7 +165,7 @@ std::optional<Point> ReturnToStart(const Point& current, const Point& start, con
     constexpr double logicToPixelScale = 38.0;
     // 阈值判断：距离太大，认为异常，直接返回空
     if (len <= 4 || len > maxOffsetThreshold * logicToPixelScale) {
-        return std::nullopt;
+        return std::nullopt; // 返回空，表示不进行点击
     }
 
     double len_px = len * logicToPixelScale;
@@ -256,7 +259,14 @@ std::optional<Point> ProcessDetailTextAndClick(const char* detail_string, const 
                 Point current = ParseTextToPoint(text);
                 if (current.x == 0 && current.y == 0) {
                     std::cerr << "Parsed point is (0, 0), skipping click.\n";
-                    return Point { 400, 300 };
+                    if (seating_time < 3) {
+                        seating_time++;
+                        return Point { 400, 300 };
+                    }
+                    else {
+                        seating_time = 0;        // 重置坐下次数
+                        return last_click_point; // 返回上次点击位置
+                    }
                 }
                 Point startPoint = ParseTextToPoint(start);
                 return ReturnToStart(current, startPoint, screenCenter);
@@ -333,28 +343,33 @@ MaaBool my_action(
 
     // 2. OCR 识别是否正在攻击
     {
-        cv::Rect attackBarRect(340, 1, 120, 20);
-        auto scaled = ScaleRect(attackBarRect, { 800, 600 }, { image.cols, image.rows });
-        json::array roi_array = { scaled.x, scaled.y, scaled.width, scaled.height };
+        if (try_time < 3) {
+            cv::Rect attackBarRect(340, 1, 120, 20);
+            auto scaled = ScaleRect(attackBarRect, { 800, 600 }, { image.cols, image.rows });
+            json::array roi_array = { scaled.x, scaled.y, scaled.width, scaled.height };
 
-        json::value override = { { "ATTACKING",
-                                   { { "recognition", "OCR" }, { "roi", roi_array }, { "threshold", 0.6 }, { "only_rec", true } } } };
+            json::value override = { { "ATTACKING",
+                                       { { "recognition", "OCR" }, { "roi", roi_array }, { "threshold", 0.6 }, { "only_rec", true } } } };
 
-        std::string override_str = override.to_string();
-        auto id = MaaContextRunRecognition(context, "ATTACKING", override_str.c_str(), image_buffer);
-        if (id != MaaInvalidId) {
-            destroy();
-            return true;
+            std::string override_str = override.to_string();
+            auto id = MaaContextRunRecognition(context, "ATTACKING", override_str.c_str(), image_buffer);
+            if (id != MaaInvalidId) {
+                destroy();
+                try_time++;
+                return true;
+            }
+            const char* detail = MaaStringBufferGet(out_detail);
+            if (check_ocr(detail)) {
+                destroy();
+                return true;
+            }
         }
-
-        const char* detail = MaaStringBufferGet(out_detail);
-        if (check_ocr(detail)) {
-            destroy();
-            return true;
+        else {
+            try_time = 0; // 重置尝试次数
         }
     }
 
-    // 3. 使用模型识别是否处于战斗状态
+    // 3. 使用模型识别寻找目标
     {
         json::value override = { { "BATTLEING",
                                    { { "recognition", "NeuralNetworkDetect" },
@@ -400,6 +415,7 @@ MaaBool my_action(
         auto pt = ProcessDetailTextAndClick(detail, custom_action_param, { 400, 300 });
         if (pt) {
             std::cout << "Click point: " << pt->x << ", " << pt->y << std::endl;
+            last_click_point = *pt;
             MaaControllerPostClick(controller, pt->x, pt->y);
         }
         else {

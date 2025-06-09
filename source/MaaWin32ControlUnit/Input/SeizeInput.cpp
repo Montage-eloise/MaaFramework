@@ -24,6 +24,10 @@ bool SeizeInput::click(int x, int y)
 
     if (hwnd_) {
         ensure_foreground();
+        // TOTEST 修正 DPI 缩放（关键步骤）
+        double dpiScale = GetDpiForWindow(hwnd_) / 96.0;
+        point.x = static_cast<LONG>(point.x * dpiScale);
+        point.y = static_cast<LONG>(point.y * dpiScale);
         ClientToScreen(hwnd_, &point);
     }
     LogInfo << VAR(x) << VAR(y) << VAR(point.x) << VAR(point.y) << VAR_VOIDP(hwnd_);
