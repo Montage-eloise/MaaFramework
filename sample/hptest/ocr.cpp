@@ -176,8 +176,8 @@ std::optional<Point> ReturnToStart(const Point& current, const Point& start, con
 
     double screenDiagonal = std::sqrt(screenCenter.x * screenCenter.x + screenCenter.y * screenCenter.y);
 
-    double minDistance = logicToPixelScale * 2;
-    double maxDistance = logicToPixelScale * 6;
+    double minDistance = logicToPixelScale * 4;
+    double maxDistance = logicToPixelScale * 8;
 
     double baseDistance = maxDistance;
     if (len_px < screenDiagonal) {
@@ -271,7 +271,13 @@ std::optional<Point> ProcessDetailTextAndClick(const char* detail_string, const 
                     }
                 }
                 Point startPoint = ParseTextToPoint(start);
-                return ReturnToStart(current, startPoint, screenCenter);
+                auto clickPoint = ReturnToStart(current, startPoint, screenCenter);
+                if (clickPoint) {
+                    std::cout << "Current point: (" << current.x << ", " << current.y << ")" << " Click point: " << clickPoint->x << ", "
+                              << clickPoint->y << std::endl;
+                    last_click_point = *clickPoint; // 更新最后点击位置
+                    return *clickPoint;             // 返回点击位置
+                }
             }
             else {
                 std::cerr << "best.text not found or not a string.\n";
@@ -410,6 +416,8 @@ MaaBool my_action(
             //     0.5,
             //     cv::Scalar(255, 255, 255),
             //     1);
+            std::cout << "Target found at: (" << out_box->x + out_box->width / 2 << ", " << out_box->y + out_box->height / 2 << ")"
+                      << std::endl;
             destroy();
             return true;
         }
@@ -431,14 +439,14 @@ MaaBool my_action(
 
         auto pt = ProcessDetailTextAndClick(detail, custom_action_param, { 400, 300 });
         if (pt) {
-            std::cout << "Click point: " << pt->x << ", " << pt->y << std::endl;
-            last_click_point = *pt;
             MaaControllerPostClick(controller, pt->x, pt->y);
         }
         else {
             std::cout << "Distance is too close to the original position, resting..." << std::endl;
-            MaaControllerPostPressKey(controller, 45); // Insert 键休息
-            is_seating = true;
+            if (!is_seating) {
+                MaaControllerPostPressKey(controller, 45); // Insert 键休息
+                is_seating = true;
+            }
         }
         // cv::circle(image, { pt->x, pt->y }, 3, cv::Scalar(0, 0, 255),
         //            -1); // -1 表示填充圆
