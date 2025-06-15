@@ -97,6 +97,9 @@ int main()
 static bool is_seating = false;
 static int try_time = 0;
 static int seating_time = 0;
+static int move_time = 0;
+static int reset_time = 0;
+static int custom_index = 0;
 
 struct Point
 {
@@ -176,8 +179,8 @@ std::optional<Point> ReturnToStart(const Point& current, const Point& start, con
 
     double screenDiagonal = std::sqrt(screenCenter.x * screenCenter.x + screenCenter.y * screenCenter.y);
 
-    double minDistance = logicToPixelScale * 4;
-    double maxDistance = logicToPixelScale * 8;
+    double minDistance = logicToPixelScale * 3;
+    double maxDistance = logicToPixelScale * 6;
 
     double baseDistance = maxDistance;
     if (len_px < screenDiagonal) {
@@ -194,6 +197,21 @@ std::optional<Point> ReturnToStart(const Point& current, const Point& start, con
     Point clickPoint = { (int)(screenCenter.x + nx * clickDistance), int(screenCenter.y + ny * clickDistance) };
 
     return clickPoint;
+}
+
+std::vector<std::string> split_by_semicolon(const std::string& input)
+{
+    std::vector<std::string> result;
+    std::stringstream ss(input);
+    std::string token;
+
+    while (std::getline(ss, token, ';')) {
+        if (!token.empty()) {
+            result.push_back(token);
+        }
+    }
+
+    return result;
 }
 
 // 工具函数：从字符串 "x,y" 提取 Point
@@ -263,7 +281,9 @@ std::optional<Point> ProcessDetailTextAndClick(const char* detail_string, const 
                     std::cerr << "Parsed point is (0, 0), skipping click.\n";
                     if (seating_time < 3) {
                         seating_time++;
-                        return Point { 400, 300 };
+                        std::cout << "Current point: (" << current.x << ", " << current.y << ")" << " Click point: " << screenCenter.x
+                                  << ", " << screenCenter.y << std::endl;
+                        return screenCenter; // 返回屏幕中心位置
                     }
                     else {
                         seating_time = 0;        // 重置坐下次数
@@ -272,6 +292,7 @@ std::optional<Point> ProcessDetailTextAndClick(const char* detail_string, const 
                 }
                 Point startPoint = ParseTextToPoint(start);
                 auto clickPoint = ReturnToStart(current, startPoint, screenCenter);
+
                 if (clickPoint) {
                     std::cout << "Current point: (" << current.x << ", " << current.y << ")" << " Click point: " << clickPoint->x << ", "
                               << clickPoint->y << std::endl;
@@ -351,7 +372,7 @@ MaaBool my_action(
 
     // 2. OCR 识别是否正在攻击
     {
-        if (try_time < 4) {
+        if (try_time < 5) {
             cv::Rect attackBarRect(340, 1, 120, 20);
             auto scaled = ScaleRect(attackBarRect, { 800, 600 }, { image.cols, image.rows });
             json::array roi_array = { scaled.x, scaled.y, scaled.width, scaled.height };
@@ -437,15 +458,24 @@ MaaBool my_action(
         MaaTaskerGetRecognitionDetail(tasker, id, nullptr, nullptr, nullptr, out_box, out_detail, nullptr, nullptr);
         const char* detail = MaaStringBufferGet(out_detail);
 
-        auto pt = ProcessDetailTextAndClick(detail, custom_action_param, { 400, 300 });
+        std::vector<std::string> custom_action_params = split_by_semicolon(custom_action_param);
+
+        auto pt = ProcessDetailTextAndClick(detail, custom_action_params[custom_index].c_str(), { 400, 300 });
         if (pt) {
-            MaaControllerPostClick(controller, pt->x, pt->y);
+            MaaControllerPostClick(controller, pt->x * image.cols / 800, pt->y * image.rows / 600);
+            reset_time = 0; // 重置休息计数
         }
         else {
             std::cout << "Distance is too close to the original position, resting..." << std::endl;
             if (!is_seating) {
-                MaaControllerPostPressKey(controller, 45); // Insert 键休息
+                // MaaControllerPostPressKey(controller, 45); // Insert 键休息
                 is_seating = true;
+            }
+            reset_time++;
+            if (reset_time >= 5) {
+                reset_time = 0;
+                custom_index = (custom_index + 1) % custom_action_params.size(); // 切换到下一个自定义动作
+                std::cout << "Switching to next custom action: " << custom_action_params[custom_index] << std::endl;
             }
         }
         // cv::circle(image, { pt->x, pt->y }, 3, cv::Scalar(0, 0, 255),
