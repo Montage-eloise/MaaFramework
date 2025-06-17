@@ -58,16 +58,39 @@ std::optional<cv::Mat> GdiScreencap::screencap()
         return std::nullopt;
     }
 
-    if (!BitBlt(mem_dc, 0, 0, width, height, hdc, 0, 0, SRCCOPY)) {
-        LogError << "BitBlt failed, error code: " << GetLastError();
+    // 使用 PrintWindow 优先
+    if (!PrintWindow(hwnd_, mem_dc, 0)) {
+        if (!BitBlt(mem_dc, 0, 0, width, height, hdc, 0, 0, SRCCOPY)) {
+            LogError << "BitBlt failed: " << GetLastError();
+            return std::nullopt;
+        }
+    }
+
+    // 获取像素数据
+    BITMAPINFOHEADER bi = {};
+    bi.biSize = sizeof(bi);
+    bi.biWidth = width;
+    bi.biHeight = -height;
+    bi.biPlanes = 1;
+    bi.biBitCount = 32;
+    bi.biCompression = BI_RGB;
+
+    cv::Mat mat(height, width, CV_8UC4);
+    if (!GetDIBits(mem_dc, bitmap, 0, height, mat.data, reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS)) {
+        LogError << "GetDIBits failed: " << GetLastError();
         return std::nullopt;
     }
 
-    cv::Mat mat(height, width, CV_8UC4);
-    if (!GetBitmapBits(bitmap, width * height * 4, mat.data)) {
-        LogError << "GetBitmapBits failed, error code: " << GetLastError();
-        return std::nullopt;
-    }
+    // if (!BitBlt(mem_dc, 0, 0, width, height, hdc, 0, 0, SRCCOPY)) {
+    //     LogError << "BitBlt failed, error code: " << GetLastError();
+    //     return std::nullopt;
+    // }
+
+    // cv::Mat mat(height, width, CV_8UC4);
+    // if (!GetBitmapBits(bitmap, width * height * 4, mat.data)) {
+    //     LogError << "GetBitmapBits failed, error code: " << GetLastError();
+    //     return std::nullopt;
+    // }
 
     return bgra_to_bgr(mat);
 }

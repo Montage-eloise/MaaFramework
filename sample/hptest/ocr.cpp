@@ -333,6 +333,36 @@ static bool check_ocr(const char* detail_string)
     return false;
 }
 
+cv::Mat enhance_for_ocr(const cv::Mat& src)
+{
+    cv::Mat gray, enhanced;
+
+    // 转灰度
+    cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
+
+    // 使用 CLAHE（对比度受限的自适应直方图均衡化）
+    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.0, cv::Size(8, 8));
+    clahe->apply(gray, enhanced);
+
+    // 可选：二值化
+    // cv::threshold(enhanced, enhanced, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+
+    // 可选：伽马校正
+    // cv::Mat gamma_corrected;
+    // enhanced.convertTo(gamma_corrected, -1, 1, 15);
+
+    // 可选：高斯模糊
+    // cv::Mat sharpened;
+    // cv::GaussianBlur(enhanced, sharpened, cv::Size(0, 0), 3);
+    // cv::addWeighted(enhanced, 1.5, sharpened, -0.5, 0, sharpened);
+
+    // 为了兼容 PaddleOCR，转回 BGR（它不接受灰度图）
+    cv::Mat bgr;
+    cv::cvtColor(enhanced, bgr, cv::COLOR_GRAY2BGR);
+
+    return bgr;
+}
+
 MaaBool my_action(
     MaaContext* context,
     MaaTaskId task_id,

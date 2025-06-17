@@ -15,3 +15,9 @@ target_include_directories(
     ocr
     PRIVATE ${MAA_PRIVATE_INC} ${MAA_PUBLIC_INC})
 target_link_libraries(ocr ${OpenCV_LIBS} MaaFramework MaaToolkit)
+
+add_executable(niu niu.cpp)
+target_include_directories(
+    niu
+    PRIVATE ${MAA_PRIVATE_INC} ${MAA_PUBLIC_INC})
+target_link_libraries(niu ${OpenCV_LIBS} MaaFramework MaaToolkit)
